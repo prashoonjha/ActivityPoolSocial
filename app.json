@@ -12,14 +12,14 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.prashoon24.activitypoolsocial",
       "config": {
-        "googleMapsApiKey": "AIzaSyDI47mhGIb71xxU17UIn8Pi7JOZa7Fz8RY"
+        "googleMapsApiKey": ""
       }
     },
     "android": {
       "package": "com.prashoon24.activitypoolsocial",
       "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#ffffff" },
       "config": {
-        "googleMaps": { "apiKey": "AIzaSyA3J_DIYgEoJcExYqgLYUlj1mGSjxp_M9s" }
+        "googleMaps": { "apiKey": "" }
       }
     },
     "plugins": [
