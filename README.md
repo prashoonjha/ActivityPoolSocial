@@ -51,7 +51,5 @@ Users can create, discover, and join local activities on a map — making it eas
 - Google Places API  
 - Google Maps SDK  
 
----
 
-## 📁 Project Structure
 
