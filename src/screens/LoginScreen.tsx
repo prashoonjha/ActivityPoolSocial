@@ -3,27 +3,42 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  View, Image
+  ScrollView,
+  StatusBar,
+  View,
+  Image,
 } from "react-native";
-import { Button, Text, TextInput, Card } from "react-native-paper";
+import { Text, TextInput } from "react-native-paper";
 import { useAuth } from "../hooks/useAuth";
-
+import { LinearGradient } from "expo-linear-gradient";
+import { MaterialIcons } from "@expo/vector-icons";
+import ActionButton from "../components/ActionButton";
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  FONT_SIZE,
+  FONT_WEIGHT,
+  SHADOW,
+} from "../theme";
 
 type Props = {
   navigation: any;
 };
 
-function LoginScreen({ navigation }: Props) {
+export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLogin() {
     setError(null);
 
-    if (!email || !password) {
+    if (!email.trim || !password) {
       setError("Fill in both fields.");
       return;
     }
@@ -32,91 +47,218 @@ function LoginScreen({ navigation }: Props) {
       setSubmitting(true);
       await login(email, password);
     } catch (e: any) {
-      console.log("Login error", e);
-      setError("Login failed. Check your email/password.");
+      const msg = e.message || "";
+      if (
+        msg.includes("user-not-found") ||
+        msg.includes("wrong-password") ||
+        msg.includes("invalid-credential")
+      ) {
+        setError("Incorrect email or password. Please try again.");
+      } else if (msg.includes("too-many-requests")) {
+        setError("Too many attempts. Try again later or reset your password.");
+      } else {
+        setError(msg || "Sign in failed. Please check your connection.");
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function goToRegister() {
-    navigation.navigate("Register");
-  }
-
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.center}>
-        <Card style={styles.card} mode="elevated">
-          <Card.Content>
-            <Image
-  source={require("../../assets/splash.png")}
-  style={{
-    width: 80,
-    height: 80,
-    alignSelf: "center",
-    marginBottom: 12,
-    borderRadius: 16,
-  }}
-/>
+      <StatusBar barStyle="light-content" />
 
-            <Text variant="headlineMedium" style={styles.title}>
-              ActivityPool Social
-            </Text>
+      {/* Gradient header */}
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary, "#6366F1"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroSection}
+      >
+        <View style={styles.logoContainer}>
+          <View style={styles.logoCircle}>
+            <MaterialIcons name="group" size={40} color={COLORS.primary} />
+          </View>
+        </View>
+        <Text style={styles.heroTitle}>ActivityPool Social</Text>
+        <Text style={styles.heroSubtitle}>
+          Join local activities. Make real connections.
+        </Text>
+      </LinearGradient>
 
-            <TextInput
-              label="Email"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
+      {/* Form panel */}
+      <ScrollView
+        contentContainerStyle={styles.formPanel}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.formTitle}>Welcome back</Text>
+        <Text style={styles.formSubtitle}>Sign in to continue</Text>
+
+        {error && (
+          <View style={styles.errorBanner}>
+            <MaterialIcons
+              name="error-outline"
+              size={16}
+              color={COLORS.error}
             />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
-            <TextInput
-              label="Password"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
+        <TextInput
+          label="Email address"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+          textContentType="emailAddress"
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+          mode="outlined"
+          left={<TextInput.Icon icon="email-outline" />}
+        />
+
+        <TextInput
+          label="Password"
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+          mode="outlined"
+          left={<TextInput.Icon icon="lock-outline" />}
+          right={
+            <TextInput.Icon
+              icon={showPassword ? "eye-off" : "eye"}
+              onPress={() => setShowPassword(!showPassword)}
             />
+          }
+        />
 
-            {error && <Text style={styles.error}>{error}</Text>}
+        <ActionButton
+          label="Sign In"
+          onPress={handleLogin}
+          loading={submitting}
+          disabled={submitting}
+          fullWidth
+          style={styles.cta}
+        />
 
-            <Button
-              mode="contained"
-              onPress={handleLogin}
-              loading={submitting}
-              disabled={submitting}
-              style={styles.button}
-            >
-              Log in
-            </Button>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>New here?</Text>
+          <View style={styles.dividerLine} />
+        </View>
 
-            <Button onPress={goToRegister}>Create an account</Button>
-          </Card.Content>
-        </Card>
-      </View>
+        <ActionButton
+          label="Create an account"
+          onPress={() => navigation.navigate("Register")}
+          variant="outline"
+          fullWidth
+        />
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  center: { flex: 1, justifyContent: "center" },
-  card: {
-    paddingVertical: 16,
-    backgroundColor: "#fff",
+  root: {
+    flex: 1,
+    backgroundColor: COLORS.background,
   },
-  title: {
+  heroSection: {
+    paddingTop: 64,
+    paddingBottom: 48,
+    paddingHorizontal: SPACING.xl,
+    alignItems: "center",
+  },
+  logoContainer: {
+    marginBottom: SPACING.md,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.lg,
+  },
+  heroTitle: {
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: FONT_WEIGHT.extrabold,
+    color: "#FFFFFF",
     textAlign: "center",
-    marginBottom: 16,
+    letterSpacing: -0.5,
+    marginBottom: SPACING.xs,
   },
-  input: { marginBottom: 12 },
-  button: { marginTop: 8, marginBottom: 8 },
-  error: { color: "red", marginBottom: 8 },
+  heroSubtitle: {
+    fontSize: FONT_SIZE.md,
+    color: "rgba(255,255,255,0.8)",
+    textAlign: "center",
+  },
+  formPanel: {
+    flexGrow: 1,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    marginTop: -RADIUS.xl,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    ...SHADOW.lg,
+  },
+  formTitle: {
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: FONT_WEIGHT.extrabold,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  formSubtitle: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.lg,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    backgroundColor: COLORS.errorLight,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.sm,
+    marginBottom: SPACING.md,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.error,
+  },
+  errorText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.error,
+    flex: 1,
+  },
+  input: {
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.surface,
+  },
+  cta: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textMuted,
+  },
 });
-
-export default LoginScreen;
