@@ -10,10 +10,11 @@ import { AuthProvider, useAuth } from "./src/hooks/useAuth";
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
 import HomeScreen from "./src/screens/HomeScreen";
+import DiscoverScreen from "./src/screens/DiscoverScreen";
 import AddActivityScreen from "./src/screens/AddActivityScreen";
 import MapScreen from "./src/screens/MapScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
-import { theme } from "./src/theme";
+import { theme, COLORS } from "./src/theme";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -44,9 +45,7 @@ function AppTabsNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerStyle: {
-          backgroundColor: theme.colors.primary, // blue header
-        },
+        headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: "#FFFFFF",
         headerTitleStyle: { fontWeight: "600" },
 
@@ -54,13 +53,14 @@ function AppTabsNavigator() {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.outline,
         },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: "#888",
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: "#94A3B8",
 
         tabBarIcon: ({ color, size }) => {
           let iconName: keyof typeof MaterialIcons.glyphMap = "home";
 
-          if (route.name === "Home") iconName = "list";
+          if (route.name === "Home") iconName = "home";
+          if (route.name === "Discover") iconName = "explore";
           if (route.name === "Add") iconName = "add-circle-outline";
           if (route.name === "Map") iconName = "map";
           if (route.name === "Profile") iconName = "person";
@@ -69,7 +69,16 @@ function AppTabsNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ title: "Home" }}
+      />
+      <Tab.Screen
+        name="Discover"
+        component={DiscoverScreen}
+        options={{ title: "Discover" }}
+      />
       <Tab.Screen
         name="Add"
         component={AddActivityScreen}
