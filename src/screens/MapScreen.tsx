@@ -1,110 +1,222 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import MapView, { Region } from "react-native-maps";
-import { Activity } from "../types/activity";
-import { collection, onSnapshot } from "firebase/firestore";
+import React, { useEffect, useState, useRef } from "react";
+import { View, StyleSheet, TouchableOpacity } from "react-native";
+import MapView, { PROVIDER_GOOGLE } from "react-native-maps";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../services/firebase";
 import { Text } from "react-native-paper";
+import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { Activity } from "../types/activity";
 import MapActivityMarker from "../components/MapActivityMarker";
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  FONT_SIZE,
+  FONT_WEIGHT,
+  SHADOW,
+} from "../theme";
 
-function MapScreen() {
+const INITIAL_REGION = {
+  latitude: 60.1699,
+  longitude: 24.9384,
+  latitudeDelta: 0.15,
+  longitudeDelta: 0.15,
+};
+
+export default function MapScreen() {
+  const mapRef = useRef<MapView>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [region, setRegion] = useState<Region | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+    null,
+  );
 
+  // Real-time activities with location
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "activities"), (snapshot) => {
-      const next: Activity[] = snapshot.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          title: data.title,
-          description: data.description,
-          dateTime: data.dateTime,
-          locationName: data.locationName ?? null,
-          latitude: data.latitude ?? null,
-          longitude: data.longitude ?? null,
-          hostId: data.hostId,
-          hostEmail: data.hostEmail ?? null,
-          participants: data.participants ?? [],
-          createdAt: data.createdAt ?? 0,
-        };
-      });
-      setActivities(next);
+    const q = query(collection(db, "activities"));
+    const unsub = onSnapshot(q, (snap) => {
+      setActivities(
+        snap.docs
+          .map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              title: data.title ?? "",
+              description: data.description ?? "",
+              dateTime: data.dateTime ?? "",
+              locationName: data.locationName ?? null,
+              latitude: data.latitude ?? null,
+              longitude: data.longitude ?? null,
+              hostId: data.hostId ?? "",
+              hostEmail: data.hostEmail ?? null,
+              hostName: data.hostName ?? null,
+              participants: data.participants ?? [],
+              participantCount: (data.participants ?? []).length,
+              maxParticipants: data.maxParticipants ?? null,
+              category: data.category ?? "other",
+              createdAt: data.createdAt ?? null,
+            };
+          })
+          .filter((a) => a.latitude != null && a.longitude != null),
+      );
     });
-
     return unsub;
   }, []);
 
-  // Center on first activity if available
-  useEffect(() => {
-    if (region) return;
-    const first = activities.find((a) => a.latitude && a.longitude);
-    if (first && first.latitude && first.longitude) {
-      setRegion({
-        latitude: first.latitude,
-        longitude: first.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    }
-  }, [activities, region]);
-
-  // try user location via Expo Location 
+  // Request location permission and get current position
   useEffect(() => {
     (async () => {
-      if (region) return;
-
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        return;
-      }
-
-      const current = await Location.getCurrentPositionAsync({});
-      setRegion({
-        latitude: current.coords.latitude,
-        longitude: current.coords.longitude,
-        latitudeDelta: 0.1,
-        longitudeDelta: 0.1,
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({});
+      setUserLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
       });
+      mapRef.current?.animateToRegion(
+        {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        },
+        600,
+      );
     })();
-  }, [region]);
+  }, []);
 
-  const fallbackRegion: Region = {
-    latitude: 60.1699, // Helsinki
-    longitude: 24.9384,
-    latitudeDelta: 0.2,
-    longitudeDelta: 0.2,
-  };
+  function goToUserLocation() {
+    if (!userLocation) return;
+    mapRef.current?.animateToRegion(
+      {
+        ...userLocation,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      },
+      600,
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <MapView style={styles.map} region={region ?? fallbackRegion}>
-        {activities.map((activity) => (
-          <MapActivityMarker key={activity.id} activity={activity} />
+    <View style={styles.root}>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={INITIAL_REGION}
+        showsUserLocation
+        showsMyLocationButton={false}
+      >
+        {activities.map((a) => (
+          <MapActivityMarker
+            key={a.id}
+            activity={a}
+            onPress={setSelectedActivity}
+          />
         ))}
       </MapView>
-      {activities.length === 0 && (
-        <Text style={styles.emptyText}>No activities on the map yet.</Text>
+
+      {/* Controls */}
+      <View style={styles.controls}>
+        <TouchableOpacity style={styles.controlBtn} onPress={goToUserLocation}>
+          <MaterialIcons name="my-location" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Activity count badge */}
+      <View style={styles.badge}>
+        <MaterialIcons name="event" size={14} color={COLORS.primary} />
+        <Text style={styles.badgeText}>
+          {activities.length} activities on map
+        </Text>
+      </View>
+
+      {/* Selected activity preview */}
+      {selectedActivity && (
+        <View style={styles.previewCard}>
+          <View style={styles.previewContent}>
+            <Text style={styles.previewTitle} numberOfLines={1}>
+              {selectedActivity.title}
+            </Text>
+            <Text style={styles.previewLocation} numberOfLines={1}>
+              {selectedActivity.locationName ?? "Location not specified"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.previewClose}
+            onPress={() => setSelectedActivity(null)}
+          >
+            <MaterialIcons name="close" size={20} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1 },
   map: { flex: 1 },
-  emptyText: {
+  controls: {
     position: "absolute",
-    bottom: 24,
-    left: 0,
-    right: 0,
-    textAlign: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    marginHorizontal: 32,
-    borderRadius: 8,
-    padding: 8,
+    right: SPACING.md,
+    bottom: SPACING.xxl + SPACING.lg,
+  },
+  controlBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.lg,
+  },
+  badge: {
+    position: "absolute",
+    top: SPACING.md,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs + 2,
+    borderRadius: RADIUS.full,
+    ...SHADOW.md,
+  },
+  badgeText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.textSecondary,
+  },
+  previewCard: {
+    position: "absolute",
+    bottom: SPACING.xxl,
+    left: SPACING.md,
+    right: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: SPACING.md,
+    ...SHADOW.lg,
+  },
+  previewContent: { flex: 1 },
+  previewTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  previewLocation: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.textSecondary,
+  },
+  previewClose: {
+    padding: SPACING.xs,
+    marginLeft: SPACING.sm,
   },
 });
-
-export default MapScreen;
