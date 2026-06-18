@@ -4,232 +4,281 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from "react-native";
-import {
-  Text,
-  TextInput,
-  Button,
-  Avatar,
-  ActivityIndicator,
-  useTheme,
-} from "react-native-paper";
+import { Text, TextInput } from "react-native-paper";
+import { MaterialIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../hooks/useAuth";
-import { db } from "../services/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import ActionButton from "../components/ActionButton";
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  FONT_SIZE,
+  FONT_WEIGHT,
+  SHADOW,
+} from "../theme";
+import { getInitials, sanitizeText } from "../utils";
 
-type UserProfile = {
-  name?: string;
-  interests?: string;
-  avatarId?: string;
-};
-
-const AVATARS = [
-  { id: "avatar1", source: require("../../assets/avatars/avatar1.png") },
-  { id: "avatar2", source: require("../../assets/avatars/avatar2.png") },
-  { id: "avatar3", source: require("../../assets/avatars/avatar3.png") },
-  { id: "avatar4", source: require("../../assets/avatars/avatar4.png") },
+// Avatar options — simple gradient-letter avatars styled in code
+const AVATAR_COLORS = [
+  { id: "a1", bg: "#4F46E5", label: "Indigo" },
+  { id: "a2", bg: "#F97316", label: "Orange" },
+  { id: "a3", bg: "#10B981", label: "Green" },
+  { id: "a4", bg: "#F43F5E", label: "Rose" },
+  { id: "a5", bg: "#8B5CF6", label: "Purple" },
+  { id: "a6", bg: "#06B6D4", label: "Cyan" },
 ];
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
-  const theme = useTheme();
+  const { user, profile, updateProfile, logout } = useAuth();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [name, setName] = useState("");
-  const [interests, setInterests] = useState("");
-  const [selectedAvatarId, setSelectedAvatarId] = useState<string>("avatar1");
+  const [name, setName] = useState(profile?.name ?? "");
+  const [interests, setInterests] = useState(profile?.interests ?? "");
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [selectedAvatar, setSelectedAvatar] = useState(
+    profile?.avatarId ?? "a1",
+  );
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  // Subscribe to users/{uid} in Firestore
   useEffect(() => {
-    if (!user) return;
+    if (profile) {
+      setName(profile.name ?? "");
+      setInterests(profile.interests ?? "");
+      setBio(profile.bio ?? "");
+      setSelectedAvatar(profile.avatarId ?? "a1");
+    }
+  }, [profile]);
 
-    const userDocRef = doc(db, "users", user.uid);
-    const unsub = onSnapshot(userDocRef, (snap) => {
-      if (!snap.exists()) {
-        // First time: no profile yet
-        setProfile({});
-        setName("");
-        setInterests("");
-        setSelectedAvatarId("avatar1");
-        return;
-      }
-
-      const data = snap.data() as UserProfile;
-      setProfile(data);
-      setName(data.name ?? "");
-      setInterests(data.interests ?? "");
-      setSelectedAvatarId(data.avatarId ?? "avatar1");
-    });
-
-    return () => unsub();
-  }, [user]);
-
-  async function saveProfile() {
-    if (!user) return;
-
+  async function handleSave() {
     try {
       setSaving(true);
-
-      const userDocRef = doc(db, "users", user.uid);
-
-      await setDoc(
-        userDocRef,
-        {
-          name: name.trim(),
-          interests: interests.trim(),
-          avatarId: selectedAvatarId,
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.log("Profile save error:", err);
+      await updateProfile({
+        name: sanitizeText(name) || null,
+        interests: sanitizeText(interests) || null,
+        bio: sanitizeText(bio) || null,
+        avatarId: selectedAvatar,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to save profile.");
     } finally {
       setSaving(false);
     }
   }
 
-  if (!user || profile === null) {
-    return (
-      <View
-        style={[
-          styles.loadingCenter,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" />
-      </View>
-    );
+  async function handleLogout() {
+    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: logout },
+    ]);
   }
 
-  const email = user.email ?? "";
-  const fallbackInitial = email.charAt(0).toUpperCase() || "A";
-  const selectedAvatar = AVATARS.find((a) => a.id === selectedAvatarId);
+  const initials = getInitials(name || profile?.name, user?.email);
+  const avatarColor =
+    AVATAR_COLORS.find((a) => a.id === selectedAvatar)?.bg ?? COLORS.primary;
+  const email = user?.email ?? "";
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      contentContainerStyle={styles.container}
-    >
-      <Text variant="headlineMedium" style={styles.title}>
-        Your Profile
-      </Text>
+    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+      {/* Header */}
+      <LinearGradient
+        colors={[COLORS.primaryDark, COLORS.primary]}
+        style={styles.hero}
+      >
+        {/* Big avatar */}
+        <View style={[styles.avatarLarge, { backgroundColor: avatarColor }]}>
+          <Text style={styles.avatarInitials}>{initials}</Text>
+        </View>
+        <Text style={styles.heroName}>{name || email.split("@")[0]}</Text>
+        <Text style={styles.heroEmail}>{email}</Text>
+      </LinearGradient>
 
-      {/* avatar preview */}
-      <View style={styles.avatarContainer}>
-        {selectedAvatar ? (
-          <Avatar.Image size={120} source={selectedAvatar.source} />
-        ) : (
-          <Avatar.Text size={120} label={fallbackInitial} />
-        )}
-        <Text style={{ marginTop: 8, opacity: 0.7 }}>
-          Choose an avatar below
-        </Text>
-      </View>
-
-      {/* Avatar choices */}
-      <Text style={styles.subTitle}>Pick your avatar and click Save profile</Text>
-      <View style={styles.avatarGrid}>
-        {AVATARS.map((avatar) => {
-          const isSelected = avatar.id === selectedAvatarId;
-          return (
+      {/* Avatar picker */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Choose avatar colour</Text>
+        <View style={styles.avatarGrid}>
+          {AVATAR_COLORS.map((av) => (
             <TouchableOpacity
-              key={avatar.id}
-              onPress={() => setSelectedAvatarId(avatar.id)}
+              key={av.id}
               style={[
                 styles.avatarOption,
-                isSelected && styles.avatarOptionSelected,
+                { backgroundColor: av.bg },
+                selectedAvatar === av.id && styles.avatarOptionSelected,
               ]}
+              onPress={() => setSelectedAvatar(av.id)}
+              activeOpacity={0.8}
             >
-              <Avatar.Image size={56} source={avatar.source} />
+              {selectedAvatar === av.id && (
+                <MaterialIcons name="check" size={20} color="#FFFFFF" />
+              )}
             </TouchableOpacity>
-          );
-        })}
+          ))}
+        </View>
       </View>
 
-      <Text style={styles.label}>Email</Text>
-      <Text style={styles.emailText}>{email}</Text>
+      {/* Profile form */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Personal info</Text>
 
-      <TextInput
-        label="Full Name"
-        value={name}
-        onChangeText={setName}
-        style={styles.input}
-        mode="outlined"
-      />
+        <Text style={styles.fieldLabel}>Email</Text>
+        <View style={styles.readonlyField}>
+          <MaterialIcons name="email" size={16} color={COLORS.textMuted} />
+          <Text style={styles.readonlyText}>{email}</Text>
+        </View>
 
-      <TextInput
-        label="Interests (e.g. hiking, board games...)"
-        value={interests}
-        onChangeText={setInterests}
-        style={styles.input}
-        mode="outlined"
-        multiline
-      />
+        <TextInput
+          label="Full name"
+          value={name}
+          onChangeText={setName}
+          mode="outlined"
+          style={styles.input}
+          autoCapitalize="words"
+          left={<TextInput.Icon icon="account-outline" />}
+        />
 
-      <Button
-        mode="contained"
-        onPress={saveProfile}
-        loading={saving}
-        disabled={saving}
-      >
-        Save profile
-      </Button>
+        <TextInput
+          label="Bio (optional)"
+          value={bio}
+          onChangeText={setBio}
+          mode="outlined"
+          style={styles.input}
+          multiline
+          numberOfLines={2}
+          maxLength={160}
+          left={<TextInput.Icon icon="text-short" />}
+        />
 
-      <Button onPress={logout} style={{ marginTop: 16 }}>
-        Log out
-      </Button>
+        <TextInput
+          label="Interests (e.g. hiking, board games, cooking)"
+          value={interests}
+          onChangeText={setInterests}
+          mode="outlined"
+          style={styles.input}
+          multiline
+          numberOfLines={2}
+          maxLength={200}
+          left={<TextInput.Icon icon="star-outline" />}
+        />
+
+        <ActionButton
+          label={saved ? "Saved ✓" : "Save profile"}
+          onPress={handleSave}
+          loading={saving}
+          disabled={saving || saved}
+          fullWidth
+          variant={saved ? "outline" : "primary"}
+          style={styles.saveBtn}
+        />
+      </View>
+
+      {/* Sign out */}
+      <View style={styles.section}>
+        <ActionButton
+          label="Sign out"
+          onPress={handleLogout}
+          variant="danger"
+          fullWidth
+        />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingCenter: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: COLORS.background },
+  container: { paddingBottom: SPACING.xxl },
+  hero: {
+    alignItems: "center",
+    paddingTop: 56,
+    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACING.xl,
+  },
+  avatarLarge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.5)",
+    marginBottom: SPACING.md,
+    ...SHADOW.lg,
   },
-  container: {
-    padding: 16,
+  avatarInitials: {
+    fontSize: FONT_SIZE.xxxl,
+    fontWeight: FONT_WEIGHT.extrabold,
+    color: "#FFFFFF",
   },
-  title: {
-    textAlign: "center",
-    marginBottom: 16,
+  heroName: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: FONT_WEIGHT.bold,
+    color: "#FFFFFF",
+    marginBottom: 4,
   },
-  avatarContainer: {
-    alignItems: "center",
-    marginBottom: 16,
+  heroEmail: {
+    fontSize: FONT_SIZE.sm,
+    color: "rgba(255,255,255,0.75)",
   },
-  subTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
+  section: {
+    backgroundColor: COLORS.surface,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    ...SHADOW.sm,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.md,
   },
   avatarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 16,
+    gap: SPACING.sm,
   },
   avatarOption: {
-    marginRight: 8,
-    marginBottom: 8,
-    padding: 2,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: "transparent",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.sm,
   },
   avatarOptionSelected: {
-    borderColor: "#1976D2",
+    borderWidth: 3,
+    borderColor: COLORS.textPrimary,
   },
-  label: {
-    fontSize: 13,
-    opacity: 0.7,
-    marginBottom: 2,
+  fieldLabel: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: FONT_WEIGHT.medium,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
   },
-  emailText: {
-    marginBottom: 12,
+  readonlyField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    backgroundColor: COLORS.surfaceVariant,
+    borderRadius: RADIUS.sm,
+    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  readonlyText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textSecondary,
   },
   input: {
-    marginBottom: 16,
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.surface,
+  },
+  saveBtn: {
+    marginTop: SPACING.xs,
   },
 });
